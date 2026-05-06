@@ -28,7 +28,7 @@
       command: microk8s status --wait-ready
       changed_when: false
 
-- name: Configure Control Plane & Linkerd
+- name: Configure Control Plane & Enable Addons
   hosts: control_plane
   become: yes
   tasks:
@@ -42,11 +42,6 @@
       register: community_output
       changed_when: "'already enabled' not in community_output.stdout"
       ignore_errors: yes # Sometimes returns a non-zero exit if already added in newer snap versions
-
-    - name: Enable Linkerd Service Mesh
-      command: microk8s enable linkerd
-      register: linkerd_output
-      changed_when: "'already enabled' not in linkerd_output.stdout"
 
 - name: Join Worker Nodes to the Cluster
   hosts: workers
@@ -95,3 +90,85 @@
         name: k6
         state: present
         update_cache: yes
+
+- name: Configure Service Mesh Separation and Visualization (IoT Environment)
+  hosts: control_plane
+  become: yes
+  tasks:
+    - name: Download Linkerd CLI (needed for viz install)
+      get_url:
+        url: https://run.linkerd.io/install
+        dest: /tmp/install_linkerd.sh
+        mode: '0755'
+
+    - name: Install Linkerd CLI locally
+      command: sh /tmp/install_linkerd.sh
+      environment:
+        INSTALLROOT: /usr/local
+      args:
+        creates: /usr/local/bin/linkerd
+
+    - name: Create the IoT namespace
+      command: microk8s kubectl create namespace iot-system
+      register: ns_create
+      failed_when: 
+        - ns_create.rc != 0
+        - "'AlreadyExists' not in ns_create.stderr"
+      changed_when: "'created' in ns_create.stdout"
+
+    - name: Annotate namespace for Linkerd Proxy Auto-Injection
+      command: >
+        microk8s kubectl annotate namespace iot-system 
+        linkerd.io/inject=enabled --overwrite
+      register: ns_annotate
+      changed_when: "'annotated' in ns_annotate.stdout"
+
+    - name: Apply Zero-Trust / Network Separation Policy (Point 3)
+      # This enforces that all incoming traffic to this namespace is DENIED by default.
+      # You will create specific "allow" policies later when you deploy the apps.
+      shell: |
+        cat <<EOF | microk8s kubectl apply -f -
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: iot-system
+          annotations:
+            config.linkerd.io/default-inbound-policy: deny
+        EOF
+      register: policy_apply
+      changed_when: "'configured' in policy_apply.stdout"
+
+    - name: Create .kube directory for root user
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '0700'
+
+    - name: Export MicroK8s config for external CLI tools
+      shell: microk8s config > /root/.kube/config
+      changed_when: false
+
+    - name: Install Linkerd CRDs
+      shell: /usr/local/bin/linkerd install --crds | microk8s kubectl apply -f -
+      register: crds_install
+      changed_when: "'created' in crds_install.stdout"
+
+    - name: Install Linkerd Control Plane
+      shell: /usr/local/bin/linkerd install | microk8s kubectl apply -f -
+      register: cp_install
+      changed_when: "'created' in cp_install.stdout"
+
+    - name: Wait for Linkerd Core to be ready
+      command: /usr/local/bin/linkerd check --wait 2m
+      changed_when: false
+
+    - name: Install Linkerd Viz (Dashboard for Verification)
+      shell: /usr/local/bin/linkerd viz install | microk8s kubectl apply -f -
+      register: viz_install
+      changed_when: "'created' in viz_install.stdout"
+
+    - name: Wait for Linkerd Viz to be ready
+      command: /usr/local/bin/linkerd viz check --wait 2m
+      changed_when: false
+      # We use the Linkerd CLI here instead of kubectl because it natively 
+      # checks the health of the entire metrics stack.
