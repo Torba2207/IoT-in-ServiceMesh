@@ -125,7 +125,7 @@
 
     - name: Apply Zero-Trust / Network Separation Policy (Point 3)
       # This enforces that all incoming traffic to this namespace is DENIED by default.
-      # You will create specific "allow" policies later when you deploy the apps.
+      # We will create specific "allow" policies later when you deploy the apps.
       shell: |
         cat <<EOF | microk8s kubectl apply -f -
         apiVersion: v1
