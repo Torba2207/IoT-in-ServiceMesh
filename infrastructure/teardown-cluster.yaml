@@ -1,0 +1,62 @@
+---
+- name: Nuke MicroK8s and Clean K8s Nodes
+  hosts: microk8s_cluster
+  become: yes
+  tasks:
+    - name: Check if MicroK8s is installed
+      command: snap list microk8s
+      register: microk8s_installed
+      failed_when: false
+      changed_when: false
+
+    - name: Completely remove MicroK8s snap and purge all data
+      command: snap remove microk8s --purge
+      when: microk8s_installed.rc == 0
+
+    - name: Remove the microk8s group from the system
+      group:
+        name: microk8s
+        state: absent
+
+    - name: Clean up residual snap directories
+      file:
+        path: /var/snap/microk8s
+        state: absent
+        
+- name: Clean Control Plane Specifics (Linkerd CLI & Configs)
+  hosts: control_plane
+  become: yes
+  tasks:
+    - name: Remove Linkerd CLI binary
+      file:
+        path: /usr/local/bin/linkerd
+        state: absent
+
+    - name: Remove root .kube directory
+      file:
+        path: /root/.kube
+        state: absent
+
+    - name: Remove Linkerd install script
+      file:
+        path: /tmp/install_linkerd.sh
+        state: absent
+
+- name: Clean Load Generator
+  hosts: load_generator
+  become: yes
+  tasks:
+    - name: Remove k6 package
+      apt:
+        name: k6
+        state: absent
+        purge: yes
+
+    - name: Remove k6 apt repository
+      apt_repository:
+        repo: "deb https://dl.k6.io/deb stable main"
+        state: absent
+
+    - name: Update apt cache after repo removal
+      apt:
+        update_cache: yes
