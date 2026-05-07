@@ -12,11 +12,15 @@
         name: snapd
         state: present
 
-    - name: Install MicroK8s via snap
-      snap:
-        name: microk8s
-        classic: yes
-        state: present
+    - name: Check if MicroK8s is installed
+      command: snap list microk8s
+      register: mk8s_check
+      failed_when: false
+      changed_when: false
+
+    - name: Install MicroK8s via raw command (Bypass Ansible bug)
+      command: snap install microk8s --classic
+      when: mk8s_check.rc != 0
 
     - name: Add current user to microk8s group
       user:
@@ -148,15 +152,32 @@
       shell: microk8s config > /root/.kube/config
       changed_when: false
 
+    - name: Install Kubernetes Gateway API CRDs (Required by Linkerd)
+      command: microk8s kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+      register: gateway_crds
+      changed_when: "'created' in gateway_crds.stdout"
+
+    - name: Check if Linkerd Control Plane is already installed
+      command: microk8s kubectl get configmap linkerd-config -n linkerd
+      register: linkerd_check
+      failed_when: false
+      changed_when: false
+
     - name: Install Linkerd CRDs
       shell: /usr/local/bin/linkerd install --crds | microk8s kubectl apply -f -
       register: crds_install
       changed_when: "'created' in crds_install.stdout"
+      when: linkerd_check.rc != 0
 
     - name: Install Linkerd Control Plane
       shell: /usr/local/bin/linkerd install | microk8s kubectl apply -f -
       register: cp_install
       changed_when: "'created' in cp_install.stdout"
+      when: linkerd_check.rc != 0
+
+    - name: Wait for Linkerd Core to be ready
+      command: /usr/local/bin/linkerd check --wait 2m
+      changed_when: false
 
     - name: Wait for Linkerd Core to be ready
       command: /usr/local/bin/linkerd check --wait 2m
