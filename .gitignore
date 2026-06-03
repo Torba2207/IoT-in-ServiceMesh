@@ -1,2 +1,3 @@
 *.pdf
 CHEATSHEET.md
+.venv/
