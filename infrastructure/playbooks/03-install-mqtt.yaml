@@ -1,0 +1,42 @@
+---
+- name: Install MQTT broker into Kubernetes
+  hosts: control_plane
+  gather_facts: false
+
+  tasks:
+    - name: Ensure temporary manifest directory exists on control plane
+      ansible.builtin.file:
+        path: /tmp/iot-manifests/mqtt
+        state: directory
+        mode: '0755'
+    
+    - name: Copy MQTT manifests to control plane
+      ansible.builtin.copy:
+        src: ../manifests/mqtt/
+        dest: /tmp/iot-manifests/mqtt/
+        mode: '0644'
+
+    - name: Apply MQTT manifests
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f /tmp/iot-manifests/mqtt/
+      register: mqtt_apply
+      changed_when: "'created' in mqtt_apply.stdout or 'configured' in mqtt_apply.stdout"
+    
+    - name: Show kubectl apply output
+      ansible.builtin.debug:
+        var: mqtt_apply.stdout_lines
+    
+    - name: Wait for Mosquitto deployment
+      ansible.builtin.shell: |
+        microk8s kubectl -n iot-system rollout status deployment/mosquitto --timeout=120s
+      changed_when: false
+
+    - name: Show MQTT resources
+      ansible.builtin.shell: |
+        microk8s kubectl -n iot-system get pods,svc,server,authorizationpolicy,meshtlsauthentication
+      changed_when: false
+      register: mqtt_status
+
+    - name: Print MQTT status
+      ansible.builtin.debug:
+        var: mqtt_status.stdout_lines
