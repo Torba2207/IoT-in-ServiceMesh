@@ -1,0 +1,89 @@
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: chirpstack-api
+  namespace: iot-system
+spec:
+  podSelector:
+    matchLabels:
+      app: chirpstack
+  port: 8080
+  proxyProtocol: HTTP/2
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: postgres-server
+  namespace: iot-system
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  port: 5432
+  proxyProtocol: opaque
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: redis-server
+  namespace: iot-system
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  port: 6379
+  proxyProtocol: opaque
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: chirpstack-identity
+  namespace: iot-system
+spec:
+  identities:
+    - "chirpstack.iot-system.serviceaccount.identity.linkerd.cluster.local"
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-chirpstack-to-postgres
+  namespace: iot-system
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: postgres-server
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: chirpstack-identity
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-chirpstack-to-redis
+  namespace: iot-system
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: redis-server
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: chirpstack-identity
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-meshed-to-chirpstack-api
+  namespace: iot-system
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: chirpstack-api
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: chirpstack-identity
