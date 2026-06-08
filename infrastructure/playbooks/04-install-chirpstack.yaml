@@ -1,0 +1,91 @@
+---
+- name: Deploy ChirpStack stack to iot-system namespace
+  hosts: control_plane
+  gather_facts: false
+
+  vars:
+    remote_dir: /tmp/iot-manifests/chirpstack
+
+  tasks:
+    - name: Ensure iot-system namespace exists
+      ansible.builtin.shell: |
+        microk8s kubectl get namespace iot-system || microk8s kubectl create namespace iot-system
+      changed_when: "'created' in namespace_result.stdout"
+      register: namespace_result
+
+    - name: Copy ChirpStack manifests to control plane
+      ansible.builtin.copy:
+        src: ../manifests/chirpstack/
+        dest: "{{ remote_dir }}/"
+        mode: '0644'
+
+    - name: Create ChirpStack secret from .env
+      ansible.builtin.shell: |
+        microk8s kubectl create secret generic chirpstack-secret \
+          --from-literal=api-secret='{{ lookup("file", playbook_dir + "/../../.env") | regex_search("CHIRPSTACK_API_SECRET=(.+)", "\1") | first }}' \
+          --namespace=iot-system \
+          --dry-run=client -o yaml | microk8s kubectl apply -f -
+      changed_when: true
+
+    - name: Deploy PostgreSQL
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f {{ remote_dir }}/postgres.yaml
+      register: postgres_result
+      changed_when: "'created' in postgres_result.stdout or 'configured' in postgres_result.stdout"
+
+    - name: Wait for PostgreSQL to be ready
+      ansible.builtin.shell: |
+        microk8s kubectl rollout status statefulset/postgres -n iot-system --timeout=120s
+      changed_when: false
+
+    - name: Deploy Redis
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f {{ remote_dir }}/redis.yaml
+      register: redis_result
+      changed_when: "'created' in redis_result.stdout or 'configured' in redis_result.stdout"
+
+    - name: Wait for Redis to be ready
+      ansible.builtin.shell: |
+        microk8s kubectl rollout status deployment/redis -n iot-system --timeout=60s
+      changed_when: false
+
+    - name: Deploy ChirpStack Gateway Bridge
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f {{ remote_dir }}/gateway-bridge.yaml
+      register: bridge_result
+      changed_when: "'created' in bridge_result.stdout or 'configured' in bridge_result.stdout"
+
+    - name: Wait for Gateway Bridge to be ready
+      ansible.builtin.shell: |
+        microk8s kubectl rollout status deployment/chirpstack-gateway-bridge -n iot-system --timeout=60s
+      changed_when: false
+
+    - name: Deploy ChirpStack
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f {{ remote_dir }}/chirpstack.yaml
+      register: chirpstack_result
+      changed_when: "'created' in chirpstack_result.stdout or 'configured' in chirpstack_result.stdout"
+
+    - name: Wait for ChirpStack to be ready
+      ansible.builtin.shell: |
+        microk8s kubectl rollout status deployment/chirpstack -n iot-system --timeout=120s
+      changed_when: false
+
+    - name: Apply Linkerd policies
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f {{ remote_dir }}/linkerd-policy.yaml
+      register: policy_result
+      changed_when: "'created' in policy_result.stdout or 'configured' in policy_result.stdout"
+
+    - name: Show all ChirpStack resources
+      ansible.builtin.shell: |
+        microk8s kubectl get pods,svc -n iot-system -l 'app in (postgres,redis,chirpstack,chirpstack-gateway-bridge)'
+      changed_when: false
+      register: cs_status
+
+    - name: Print status
+      ansible.builtin.debug:
+        msg:
+          - "{{ cs_status.stdout_lines }}"
+          - "ChirpStack UI: http://10.29.16.101:30080  (admin / admin)"
+          - "Gateway Bridge UDP: 10.29.16.101:31700  (point UG63 here)"
