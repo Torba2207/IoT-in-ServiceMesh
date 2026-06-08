@@ -1,3 +1,4 @@
 *.pdf
 CHEATSHEET.md
 .venv/
+.env
