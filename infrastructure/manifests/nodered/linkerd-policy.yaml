@@ -1,0 +1,59 @@
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: nodered-ui
+  namespace: iot-system
+spec:
+  podSelector:
+    matchLabels:
+      app: nodered
+  port: 1880
+  proxyProtocol: HTTP/1
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: nodered-identity
+  namespace: iot-system
+spec:
+  identities:
+    - "node-red.iot-system.serviceaccount.identity.linkerd.cluster.local"
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-nodered-to-postgres
+  namespace: iot-system
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: postgres-server
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: nodered-identity
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: NetworkAuthentication
+metadata:
+  name: external-nodered-ui-clients
+  namespace: iot-system
+spec:
+  networks:
+    - cidr: 0.0.0.0/0
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-external-to-nodered-ui
+  namespace: iot-system
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: nodered-ui
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: NetworkAuthentication
+      name: external-nodered-ui-clients
