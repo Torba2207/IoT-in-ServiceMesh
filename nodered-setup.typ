@@ -267,15 +267,39 @@ Click the red *Deploy* button (top right). The MQTT-in node should show *connect
 
 == Verifying the Flow
 
-After a device sends an uplink, confirm rows are appearing in the database:
+Before real devices are connected, the flow can be tested end-to-end by publishing a fake uplink directly into Mosquitto using `mosquitto_pub` from inside the broker pod:
+
+```bash
+kubectl exec -n iot-system deployment/mosquitto -- mosquitto_pub \
+  -h localhost -p 1883 \
+  -t "application/test-app/device/aabbccddeeff0011/event/up" \
+  -m '{
+    "deviceInfo": {
+      "devEui": "aabbccddeeff0011",
+      "deviceName": "test-sensor"
+    },
+    "time": "2026-06-09T18:00:00Z",
+    "fPort": 1,
+    "object": {"temperature": 22.5, "humidity": 60}
+  }'
+```
+
+Then confirm the row landed in the database:
 
 ```bash
 kubectl exec -n iot-system statefulset/postgres -- \
   psql -U chirpstack -d chirpstack -c \
-  "SELECT device_eui, device_name, received_at, f_port
+  "SELECT device_eui, device_name, received_at, f_port, payload
    FROM device_uplinks
    ORDER BY received_at DESC
    LIMIT 5;"
+```
+
+Expected output:
+```
+    device_eui    | device_name |      received_at       | f_port |                payload
+------------------+-------------+------------------------+--------+---------------------------------------
+ aabbccddeeff0011 | test-sensor | 2026-06-09 18:00:00+00 |      1 | {"humidity": 60, "temperature": 22.5}
 ```
 
 == Exporting and Versioning the Flow
