@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: node-red
+  namespace: iot-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nodered-settings
+  namespace: iot-system
+data:
+  settings.js: |
+    module.exports = {
+      uiPort: process.env.PORT || 1880,
+      uiHost: "0.0.0.0",
+
+      logLevel: "info",
+
+      functionGlobalContext: {
+        os:require('os')
+      },
+
+      editorTheme: {
+        projects: false,
+        palette: {
+          catalogues: [
+            'https://catalogue.nodered.org/catalogue.json'
+          ]
+        }
+      },
+
+      httpNodeRoot: '/api',
+      httpAdminRoot: '/',
+
+      contextStorage: {
+        default: {
+          module: "localfilesystem"
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodered
+  namespace: iot-system
+  labels:
+    app: nodered
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nodered
+  template:
+    metadata:
+      labels:
+        app: nodered
+    spec:
+      serviceAccountName: node-red
+      containers:
+        - name: nodered
+          image: nodered/node-red:latest
+          ports:
+            - containerPort: 1880
+              name: ui
+          volumeMounts:
+            - name: nodered-data
+              mountPath: /data
+            - name: nodered-settings
+              mountPath: /data/settings.js
+              subPath: settings.js
+          env:
+            - name: TZ
+              value: "UTC"
+            - name: NODE_RED_ENABLE_PROJECTS
+              value: "false"
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+              ephemeral-storage: "1Gi"
+      volumes:
+        - name: nodered-data
+          persistentVolumeClaim:
+            claimName: nodered-data
+        - name: nodered-settings
+          configMap:
+            name: nodered-settings
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodered
+  namespace: iot-system
+spec:
+  selector:
+    app: nodered
+  type: ClusterIP
+  ports:
+    - name: ui
+      port: 1880
+      targetPort: 1880
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodered-ui
+  namespace: iot-system
+spec:
+  selector:
+    app: nodered
+  type: NodePort
+  ports:
+    - name: ui
+      port: 1880
+      targetPort: 1880
+      nodePort: 31880
