@@ -8,7 +8,7 @@ spec:
     matchLabels:
       app: chirpstack
   port: 8080
-  proxyProtocol: HTTP/2
+  proxyProtocol: HTTP/1
 ---
 apiVersion: policy.linkerd.io/v1beta3
 kind: Server
@@ -87,3 +87,27 @@ spec:
     - group: policy.linkerd.io
       kind: MeshTLSAuthentication
       name: chirpstack-identity
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: NetworkAuthentication
+metadata:
+  name: external-chirpstack-ui-clients
+  namespace: iot-system
+spec:
+  networks:
+    - cidr: 0.0.0.0/0
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-external-to-chirpstack-ui
+  namespace: iot-system
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: chirpstack-api
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: NetworkAuthentication
+      name: external-chirpstack-ui-clients

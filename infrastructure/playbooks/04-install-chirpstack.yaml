@@ -19,6 +19,24 @@
         dest: "{{ remote_dir }}/"
         mode: '0644'
 
+    - name: Ensure MQTT manifest directory exists on control plane
+      ansible.builtin.file:
+        path: /tmp/iot-manifests/mqtt
+        state: directory
+        mode: "0755"
+
+    - name: Copy updated MQTT Linkerd policy to control plane
+      ansible.builtin.copy:
+        src: ../manifests/mqtt/linkerd-policy.yaml
+        dest: /tmp/iot-manifests/mqtt/linkerd-policy.yaml
+        mode: "0644"
+
+    - name: Apply updated MQTT Linkerd policy
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f /tmp/iot-manifests/mqtt/linkerd-policy.yaml
+      register: mqtt_policy_result
+      changed_when: "'created' in mqtt_policy_result.stdout or 'configured' in mqtt_policy_result.stdout"
+
     - name: Create ChirpStack secret from .env
       ansible.builtin.shell: |
         microk8s kubectl create secret generic chirpstack-secret \
