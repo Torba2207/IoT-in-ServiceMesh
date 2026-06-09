@@ -160,9 +160,136 @@ Linkerd `AuthorizationPolicy` does not accept Kubernetes Service as a `targetRef
   [Gateway Bridge UDP], [`10.29.16.101:31700`], [UG63 Packet Forwarder target],
 )
 
+= Building the MQTT → PostgreSQL Flow
+
+This section is a step-by-step guide for creating the uplink processing flow inside the Node-RED UI. The resulting flow subscribes to ChirpStack device uplink events on Mosquitto, transforms the JSON payload, and inserts a row into PostgreSQL.
+
+Target canvas layout:
+```
+[mqtt in] → [Transform uplink] → [postgresql]
+                    |
+                    └──────────→ [debug]
+```
+
+== Step 1 — Install the PostgreSQL Palette Node
+
+The default Node-RED image does not include a PostgreSQL output node.
+
++ Open `http://10.29.16.101:31880`
++ Click *☰ → Manage palette → Install* tab
++ Search for `node-red-contrib-postgresql` and click *Install*
++ Wait \~30 s for installation to complete, then close the palette manager
+
+== Step 2 — Create the Database Table
+
+Before wiring the database node, create the target table. Run from your local machine:
+
+```bash
+kubectl exec -n iot-system statefulset/postgres -- \
+  psql -U chirpstack -d chirpstack -c "
+    CREATE TABLE IF NOT EXISTS device_uplinks (
+      id          BIGSERIAL PRIMARY KEY,
+      device_eui  TEXT NOT NULL,
+      device_name TEXT,
+      received_at TIMESTAMPTZ NOT NULL,
+      f_port      SMALLINT,
+      payload     JSONB
+    );
+  "
+```
+
+== Step 3 — Add the MQTT-in Node
+
++ Drag *mqtt in* from the left panel onto the canvas
++ Double-click it → click the pencil icon next to *Server* to add a new broker:
+  - *Host:* `mosquitto` · *Port:* `1883` · *Client ID:* `node-red`
+  - Click *Add*
++ Back in the node config:
+  - *Topic:* `application/+/device/+/event/up`
+  - *QoS:* `0`
+  - *Output:* `a parsed JSON object`
++ Click *Done*
+
+The `+` wildcards match any application ID and any device EUI. ChirpStack publishes all device uplinks here because `topic_prefix = "application"` is set in `chirpstack.toml`.
+
+== Step 4 — Add the Function Node
+
++ Drag *function* onto the canvas and connect it to the MQTT-in node
++ Double-click it, name it `Transform uplink`
++ Paste the following into the function body:
+
+```js
+const payload = msg.payload;
+
+msg.params = [
+    payload.deviceInfo?.devEui   ?? "unknown",
+    payload.deviceInfo?.deviceName ?? "unknown",
+    payload.time ?? new Date().toISOString(),
+    payload.fPort ?? 0,
+    JSON.stringify(payload.object ?? payload.data ?? {})
+];
+
+return msg;
+```
+
++ Click *Done*
+
+`payload.object` contains the decoded payload when a JavaScript codec is configured in ChirpStack. `payload.data` is the raw base64-encoded bytes when no codec is set. The function prefers the decoded form.
+
+== Step 5 — Add the PostgreSQL Node
+
++ Drag *postgresql* onto the canvas and connect it to the Function node
++ Double-click it → click the pencil icon next to *Database* to add a new connection:
+  - *Host:* `postgres` · *Port:* `5432`
+  - *Database:* `chirpstack`
+  - *Username:* `chirpstack` · *Password:* `chirpstack`
+  - *SSL:* off
+  - Click *Add*
++ Set the *Query* field to:
+
+```sql
+INSERT INTO device_uplinks (device_eui, device_name, received_at, f_port, payload)
+VALUES ($1, $2, $3, $4, $5)
+```
+
++ Set *Inputs* to `msg.params`
++ Click *Done*
+
+== Step 6 — Add a Debug Node
+
++ Drag *debug* onto the canvas and connect it to the Function node output (in parallel with the PostgreSQL node)
++ Set *Output* to `complete msg object`
++ The *Debug* panel (bug icon, top right) will show every incoming uplink in real time — useful for verifying payload structure before writing a codec
+
+== Step 7 — Deploy
+
+Click the red *Deploy* button (top right). The MQTT-in node should show *connected* underneath it within a few seconds.
+
+== Verifying the Flow
+
+After a device sends an uplink, confirm rows are appearing in the database:
+
+```bash
+kubectl exec -n iot-system statefulset/postgres -- \
+  psql -U chirpstack -d chirpstack -c \
+  "SELECT device_eui, device_name, received_at, f_port
+   FROM device_uplinks
+   ORDER BY received_at DESC
+   LIMIT 5;"
+```
+
+== Exporting and Versioning the Flow
+
+Once the flow is working, export it to keep it in version control:
+
++ *☰ → Export → Download* — saves `flows.json` locally
++ Commit it to the repository under `infrastructure/manifests/nodered/flows.json`
+
+This file can later be used to seed the PVC via an init container for fully reproducible deployments.
+
 = Next Steps
 
-+ *Build the uplink flow* in Node-RED UI: MQTT-in node → `application/+/device/+/event/up` → Function node (decode payload) → PostgreSQL node (insert row).
-+ *Install `node-red-contrib-postgresql`* via Palette Manager (☰ → Manage palette) to enable the PostgreSQL output node.
-+ *Create a `device_uplinks` table* in PostgreSQL with columns: `device_eui`, `received_at`, `f_port`, `payload` (JSONB).
++ *Register a LoRaWAN device* in ChirpStack UI and send a test uplink to verify the end-to-end pipeline.
++ *Write a payload codec* in ChirpStack (JavaScript) so `payload.object` contains structured fields instead of raw base64.
++ *Export and commit* `flows.json` after the flow is stable (see §6.8).
 + *Deploy Grafana* in `iot-system`, pointed at PostgreSQL, for dashboard visualisation.
