@@ -40,7 +40,7 @@ metadata:
   labels:
     app: chirpstack-gateway-bridge
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: chirpstack-gateway-bridge
