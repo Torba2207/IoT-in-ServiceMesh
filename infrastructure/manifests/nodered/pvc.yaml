@@ -8,4 +8,5 @@ spec:
     - ReadWriteOnce
   storageClassName: microk8s-hostpath
   resources:
-    storage: 5Gi
+    requests:
+      storage: 5Gi
