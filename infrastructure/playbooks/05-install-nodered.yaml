@@ -1,0 +1,55 @@
+---
+- name: Deploy Node-RED to iot-system namespace
+  hosts: control_plane
+  gather_facts: false
+
+  vars:
+    remote_dir: /tmp/iot-manifests/nodered
+
+  tasks:
+    - name: Ensure temporary manifest directory exists on control plane
+      ansible.builtin.file:
+        path: "{{ remote_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy Node-RED manifests to control plane
+      ansible.builtin.copy:
+        src: ../manifests/nodered/
+        dest: "{{ remote_dir }}/"
+        mode: '0644'
+
+    - name: Apply PersistentVolumeClaim
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f {{ remote_dir }}/pvc.yaml
+      register: pvc_result
+      changed_when: "'created' in pvc_result.stdout or 'configured' in pvc_result.stdout"
+
+    - name: Deploy Node-RED
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f {{ remote_dir }}/nodered.yaml
+      register: nodered_result
+      changed_when: "'created' in nodered_result.stdout or 'configured' in nodered_result.stdout"
+
+    - name: Wait for Node-RED to be ready
+      ansible.builtin.shell: |
+        microk8s kubectl rollout status deployment/nodered -n iot-system --timeout=120s
+      changed_when: false
+
+    - name: Apply Linkerd policies
+      ansible.builtin.shell: |
+        microk8s kubectl apply -f {{ remote_dir }}/linkerd-policy.yaml
+      register: policy_result
+      changed_when: "'created' in policy_result.stdout or 'configured' in policy_result.stdout"
+
+    - name: Show Node-RED resources
+      ansible.builtin.shell: |
+        microk8s kubectl get pods,svc,pvc -n iot-system -l app=nodered
+      changed_when: false
+      register: nodered_status
+
+    - name: Print status
+      ansible.builtin.debug:
+        msg:
+          - "{{ nodered_status.stdout_lines }}"
+          - "Node-RED UI: http://10.29.16.101:31880"
