@@ -42,28 +42,46 @@
       changed_when: false
 
     # ---------------- Linkerd ----------------
+    # linkerd install is not idempotent (it refuses if linkerd-config exists),
+    # so only install when the control plane is absent. `linkerd check` still
+    # runs afterwards either way.
+    - name: Check whether Linkerd is already installed
+      ansible.builtin.command: "{{ kubectl_bin }} get configmap linkerd-config -n linkerd"
+      register: linkerd_check
+      failed_when: false
+      changed_when: false
+
     - name: Install Linkerd CRDs
       ansible.builtin.shell: "set -o pipefail; {{ linkerd_bin }} install --crds | {{ kubectl_bin }} apply -f -"
       args: { executable: /bin/bash }
       register: lk_crds
       changed_when: "'created' in lk_crds.stdout or 'configured' in lk_crds.stdout"
+      when: linkerd_check.rc != 0
 
     - name: Install Linkerd control plane
       ansible.builtin.shell: "set -o pipefail; {{ linkerd_bin }} install | {{ kubectl_bin }} apply -f -"
       args: { executable: /bin/bash }
       register: lk_cp
       changed_when: "'created' in lk_cp.stdout or 'configured' in lk_cp.stdout"
+      when: linkerd_check.rc != 0
 
     - name: Wait for Linkerd control plane to be healthy
       ansible.builtin.command: "{{ linkerd_bin }} check"
       changed_when: false
 
     # ---------------- Linkerd Viz ----------------
+    - name: Check whether Linkerd Viz is already installed
+      ansible.builtin.command: "{{ kubectl_bin }} get namespace linkerd-viz"
+      register: viz_check
+      failed_when: false
+      changed_when: false
+
     - name: Install Linkerd Viz
       ansible.builtin.shell: "set -o pipefail; {{ linkerd_bin }} viz install | {{ kubectl_bin }} apply -f -"
       args: { executable: /bin/bash }
       register: lk_viz
       changed_when: "'created' in lk_viz.stdout or 'configured' in lk_viz.stdout"
+      when: viz_check.rc != 0
 
     - name: Wait for Linkerd Viz to be healthy
       ansible.builtin.command: "{{ linkerd_bin }} check"
@@ -128,9 +146,12 @@
       changed_when: "'created' in argocd_ns.stdout"
 
     - name: Install ArgoCD (stable manifest)
-      ansible.builtin.command: "{{ kubectl_bin }} apply -n argocd -f {{ argocd_install_url }}"
+      # Server-side apply: the applicationsets CRD is larger than the 256 KB
+      # limit for the client-side last-applied-configuration annotation, so a
+      # plain `kubectl apply` fails with "metadata.annotations: Too long".
+      ansible.builtin.command: "{{ kubectl_bin }} apply --server-side --force-conflicts -n argocd -f {{ argocd_install_url }}"
       register: argocd_install
-      changed_when: "'created' in argocd_install.stdout or 'configured' in argocd_install.stdout"
+      changed_when: "'created' in argocd_install.stdout or 'configured' in argocd_install.stdout or 'serverside-applied' in argocd_install.stdout"
 
     - name: Wait for ArgoCD core components to be ready
       ansible.builtin.command: "{{ kubectl_bin }} -n argocd rollout status {{ item }} --timeout=300s"
