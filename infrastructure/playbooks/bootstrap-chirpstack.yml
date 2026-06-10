@@ -1,0 +1,55 @@
+---
+# Provision ChirpStack (tenant, application, device profiles + codecs, gateway,
+# devices and OTAA keys) by running infrastructure/chirpstack/bootstrap.py.
+#
+# Runs locally and reaches ChirpStack over its NodePort. The script self-logs-in
+# (admin/admin by default) so no pre-created API token is needed.
+#
+# Secrets come from the gitignored .env:
+#   APPKEY_<DEVEUI>=<32-hex>          (one per device; required for OTAA keys)
+#   CHIRPSTACK_LOGIN_PASSWORD=<pw>    (optional, if admin password was changed)
+#
+# Usage:
+#   make bootstrap_chirpstack                 # apply
+#   make bootstrap_chirpstack DRY_RUN=true    # preview
+- name: Provision ChirpStack tenant, application, gateway and devices
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    chirpstack_dir: "{{ playbook_dir }}/../chirpstack"
+    venv_dir: "{{ playbook_dir }}/../chirpstack/.venv"
+    config_file: "{{ playbook_dir }}/../chirpstack/devices.yaml"
+    env_file: "{{ playbook_dir }}/../../.env"
+    # ChirpStack gRPC API, reached via the chirpstack-ui NodePort (port 8080 is
+    # opaque in the mesh, so native gRPC passes through).
+    chirpstack_server: "{{ cs_server | default('10.29.16.101:30080') }}"
+    dry_run: false
+
+  tasks:
+    - name: Ensure the bootstrap virtualenv exists with its dependencies
+      ansible.builtin.pip:
+        requirements: "{{ chirpstack_dir }}/requirements.txt"
+        virtualenv: "{{ venv_dir }}"
+        virtualenv_command: python3 -m venv
+
+    - name: Load APPKEY_* and login overrides from .env
+      ansible.builtin.set_fact:
+        bootstrap_env: "{{ dict(lookup('file', env_file) | regex_findall('(?m)^([A-Z][A-Z0-9_]*)=(.*)$')) }}"
+      no_log: true
+
+    - name: Run the ChirpStack bootstrap
+      ansible.builtin.command:
+        argv: >-
+          {{ [venv_dir ~ '/bin/python', chirpstack_dir ~ '/bootstrap.py',
+              '--server', chirpstack_server,
+              '--config', config_file]
+             + (['--dry-run'] if dry_run | bool else []) }}
+      environment: "{{ bootstrap_env }}"
+      register: bootstrap_out
+      changed_when: "'created' in bootstrap_out.stdout or 'updated' in bootstrap_out.stdout"
+
+    - name: Show bootstrap output
+      ansible.builtin.debug:
+        var: bootstrap_out.stdout_lines
