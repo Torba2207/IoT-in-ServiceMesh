@@ -1,0 +1,141 @@
+[
+    {
+        "id": "9b5f95784a763524",
+        "type": "tab",
+        "label": "MQTT-PostgresSQL",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "ef88e2e59af04f7e",
+        "type": "mqtt-broker",
+        "name": "mqtt-broker-0",
+        "broker": "mosquitto",
+        "port": 1883,
+        "clientid": "node-red",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "ced041b9b06f49cf",
+        "type": "postgreSQLConfig",
+        "name": "chirpstack_connection",
+        "host": "postgres",
+        "hostFieldType": "str",
+        "port": 5432,
+        "portFieldType": "num",
+        "database": "chirpstack",
+        "databaseFieldType": "str",
+        "ssl": "false",
+        "sslFieldType": "bool",
+        "applicationName": "",
+        "applicationNameType": "str",
+        "max": 10,
+        "maxFieldType": "num",
+        "idle": 1000,
+        "idleFieldType": "num",
+        "connectionTimeout": 10000,
+        "connectionTimeoutFieldType": "num",
+        "user": "chirpstack",
+        "userFieldType": "str",
+        "password": "",
+        "passwordFieldType": "str"
+    },
+    {
+        "id": "4b86a7453bf550de",
+        "type": "mqtt in",
+        "z": "9b5f95784a763524",
+        "name": "",
+        "topic": "application/+/device/+/event/up",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "ef88e2e59af04f7e",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 270,
+        "y": 220,
+        "wires": [
+            [
+                "a2cdaaa47b8ccdf0"
+            ]
+        ]
+    },
+    {
+        "id": "a2cdaaa47b8ccdf0",
+        "type": "function",
+        "z": "9b5f95784a763524",
+        "name": "Transform uplink",
+        "func": "const payload = msg.payload;\n\nmsg.params = [\n    payload.deviceInfo?.devEui ?? \"unknown\",\n    payload.deviceInfo?.deviceName ?? \"unknown\",\n    payload.time ?? new Date().toISOString(),\n    payload.fPort ?? 0,\n    JSON.stringify(payload.object ?? payload.data ?? {})\n];\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 220,
+        "wires": [
+            [
+                "6d4b76b5c6c03c20",
+                "1cc81de5d671dfc5"
+            ]
+        ]
+    },
+    {
+        "id": "6d4b76b5c6c03c20",
+        "type": "postgresql",
+        "z": "9b5f95784a763524",
+        "name": "",
+        "query": "INSERT INTO device_uplinks (device_eui, device_name, received_at, f_port, payload)\nVALUES ($1, $2, $3, $4, $5)",
+        "postgreSQLConfig": "ced041b9b06f49cf",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 990,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "1cc81de5d671dfc5",
+        "type": "debug",
+        "z": "9b5f95784a763524",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 960,
+        "y": 300,
+        "wires": []
+    }
+]
