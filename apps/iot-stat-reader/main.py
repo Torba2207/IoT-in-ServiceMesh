@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 from typing import Optional
+import asyncio
 import os
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 
 DB_DSN = (
@@ -15,13 +17,26 @@ DB_DSN = (
 )
 
 pool: asyncpg.Pool = None
+_sse_clients: set[asyncio.Queue] = set()
+
+
+def _broadcast_uplink(conn, pid, channel, payload):
+    for q in _sse_clients.copy():
+        q.put_nowait(payload)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pool
     pool = await asyncpg.create_pool(DB_DSN, min_size=1, max_size=5)
+
+    listen_conn = await asyncpg.connect(DB_DSN)
+    await listen_conn.add_listener("new_uplink", _broadcast_uplink)
+
     yield
+
+    await listen_conn.remove_listener("new_uplink", _broadcast_uplink)
+    await listen_conn.close()
     await pool.close()
 
 
@@ -166,3 +181,23 @@ async def get_uplinks(
     async with pool.acquire() as conn:
         rows = await conn.fetch(query, *params)
     return [dict(r) for r in rows]
+
+
+@app.get("/uplinks/stream")
+async def stream_uplinks():
+    queue: asyncio.Queue = asyncio.Queue()
+    _sse_clients.add(queue)
+
+    async def event_generator():
+        try:
+            while True:
+                payload = await queue.get()
+                yield f"data: {payload}\n\n"
+        finally:
+            _sse_clients.discard(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
