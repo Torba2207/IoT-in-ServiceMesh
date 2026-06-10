@@ -23,7 +23,7 @@ device_profiles:
     supports_class_b: false
     supports_class_c: false
     adr: true
-    codec_file: "/config/decoders/ws101-decoder.js"
+    codec_file: "decoders/ws101-decoder.js"
 
   - name: "Milesight WS202 PIR Light"
     region: "eu868"
@@ -33,7 +33,7 @@ device_profiles:
     supports_class_b: false
     supports_class_c: false
     adr: true
-    codec_file: "/config/decoders/ws202-decoder.js"
+    codec_file: "decoders/ws202-decoder.js"
 
   - name: "Milesight WS302 Sound Level"
     region: "eu868"
@@ -43,7 +43,7 @@ device_profiles:
     supports_class_b: false
     supports_class_c: false
     adr: true
-    codec_file: "/config/decoders/ws302-decoder.js"
+    codec_file: "decoders/ws302-decoder.js"
 
 devices:
   - name: "Button-1"
@@ -70,7 +70,7 @@ devices:
     dev_eui: "24e124743d186530"
     join_eui: "24e124c0002a0003"
     profile: "Milesight WS302 Sound Level"
-    app_key_env: "APPKEY_24e124743d186530"
+    app_key_env: "APPKEY_24E124743D186530"
     tags:
       device_type: "ws302"
       location: "lab"
