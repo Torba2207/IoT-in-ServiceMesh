@@ -58,6 +58,31 @@ spec:
         app: nodered
     spec:
       serviceAccountName: node-red
+      initContainers:
+        # Seed the flows and install the PostgreSQL palette node into a fresh
+        # /data PVC. Both steps are guarded so an existing PVC (with your GUI
+        # edits) is never clobbered — they only run on a brand-new volume.
+        - name: seed
+          image: nodered/node-red:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              if [ ! -f /data/flows.json ]; then
+                echo "seeding flows.json from git"
+                cp /seed/flows.json /data/flows.json
+              fi
+              if [ ! -d /data/node_modules/node-red-contrib-postgresql ]; then
+                echo "installing node-red-contrib-postgresql palette node"
+                cd /data && npm install --no-audit --no-fund node-red-contrib-postgresql@~0.15.4
+              fi
+              echo "seed complete"
+          volumeMounts:
+            - name: nodered-data
+              mountPath: /data
+            - name: nodered-flows
+              mountPath: /seed
       containers:
         - name: nodered
           image: nodered/node-red:latest
@@ -90,6 +115,9 @@ spec:
         - name: nodered-settings
           configMap:
             name: nodered-settings
+        - name: nodered-flows
+          configMap:
+            name: nodered-flows
 ---
 apiVersion: v1
 kind: Service
