@@ -1,0 +1,54 @@
+---
+# Full teardown of the IoT service-mesh platform, in reverse order of setup.
+#
+# Runs locally against the cluster. Every step is tolerant of already-absent
+# resources (--ignore-not-found / failed_when: false), so it is safe to run
+# repeatedly or against a partially-installed cluster.
+#
+# Override binaries with: -e kubectl_bin=... -e linkerd_bin=...
+- name: Tear down all services, ArgoCD, Linkerd Viz and Linkerd
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    kubectl_bin: kubectl
+    linkerd_bin: linkerd
+    argocd_apps: "{{ playbook_dir }}/../argocd/apps.yaml"
+
+  tasks:
+    - name: Remove ArgoCD Applications (stop GitOps management)
+      ansible.builtin.command: "{{ kubectl_bin }} delete -f {{ argocd_apps }} --ignore-not-found"
+      register: del_apps
+      failed_when: false
+      changed_when: "'deleted' in del_apps.stdout"
+
+    - name: Delete iot-system namespace (all workloads, services, policies, secrets)
+      ansible.builtin.command: "{{ kubectl_bin }} delete namespace iot-system --ignore-not-found --wait=true --timeout=180s"
+      register: del_ns
+      failed_when: false
+      changed_when: "'deleted' in del_ns.stdout"
+
+    - name: Uninstall Linkerd Viz
+      ansible.builtin.shell: "set -o pipefail; {{ linkerd_bin }} viz uninstall | {{ kubectl_bin }} delete --ignore-not-found -f -"
+      args: { executable: /bin/bash }
+      register: del_viz
+      failed_when: false
+      changed_when: "'deleted' in del_viz.stdout"
+
+    - name: Uninstall Linkerd control plane and CRDs
+      ansible.builtin.shell: "set -o pipefail; {{ linkerd_bin }} uninstall | {{ kubectl_bin }} delete --ignore-not-found -f -"
+      args: { executable: /bin/bash }
+      register: del_linkerd
+      failed_when: false
+      changed_when: "'deleted' in del_linkerd.stdout"
+
+    - name: Delete argocd namespace
+      ansible.builtin.command: "{{ kubectl_bin }} delete namespace argocd --ignore-not-found --wait=true --timeout=180s"
+      register: del_argocd
+      failed_when: false
+      changed_when: "'deleted' in del_argocd.stdout"
+
+    - name: Teardown summary
+      ansible.builtin.debug:
+        msg: "Teardown complete — iot-system, ArgoCD, Linkerd Viz and Linkerd removed where present."
