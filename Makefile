@@ -22,7 +22,9 @@ PB    := infrastructure/playbooks
 INV   := -i localhost,
 EXTRA := -e kubectl_bin=$(KUBECTL) -e linkerd_bin=$(LINKERD)
 
-.PHONY: help setup_everything setup_mk8s set_all_up teardown status nodered_export
+.PHONY: help setup_everything setup_mk8s set_all_up teardown status nodered_export bootstrap_chirpstack
+
+DRY_RUN ?= false
 
 help:
 	@echo "Targets:"
@@ -32,6 +34,7 @@ help:
 	@echo "  make teardown         - remove all services, ArgoCD, Linkerd Viz and Linkerd"
 	@echo "  make status           - ArgoCD apps + iot-system pods + mesh edges"
 	@echo "  make nodered_export   - snapshot live Node-RED flows back into git (sanitized)"
+	@echo "  make bootstrap_chirpstack [DRY_RUN=true] - provision ChirpStack tenant/app/profiles/gateway/devices"
 	@echo ""
 	@echo "  KUBECTL=$(KUBECTL)"
 	@echo "  LINKERD=$(LINKERD)"
@@ -54,6 +57,9 @@ teardown:
 
 nodered_export:
 	@KUBECTL=$(KUBECTL) bash infrastructure/scripts/nodered-export.sh
+
+bootstrap_chirpstack:
+	$(ANSIBLE) $(INV) $(PB)/bootstrap-chirpstack.yml -e dry_run=$(DRY_RUN)
 
 status:
 	@$(KUBECTL) get applications -n argocd || true
