@@ -77,20 +77,6 @@ spec:
           configMap:
             name: chirpstack-gateway-bridge-config
 ---
-# ClusterIP for MQTT traffic (mesh-internal, TCP)
-apiVersion: v1
-kind: Service
-metadata:
-  name: chirpstack-gateway-bridge
-  namespace: iot-system
-spec:
-  selector:
-    app: chirpstack-gateway-bridge
-  ports:
-    - name: mqtt
-      port: 1883
-      targetPort: 1883
----
 # NodePort for the physical UG63 gateway (UDP, bypasses Linkerd)
 apiVersion: v1
 kind: Service
