@@ -22,6 +22,7 @@
     argocd_apps: "{{ playbook_dir }}/../argocd/apps.yaml"
     ns_manifest: "{{ playbook_dir }}/../manifests/bootstrap/iot-system-namespace.yaml"
     viz_policy: "{{ playbook_dir }}/../manifests/observability/linkerd-viz-policy.yaml"
+    env_file: "{{ playbook_dir }}/../../.env"
     argocd_install_url: "https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
     argocd_apps_list:
       - chirpstack
@@ -78,6 +79,32 @@
       ansible.builtin.command: "{{ kubectl_bin }} apply -f {{ viz_policy }}"
       register: viz_pol
       changed_when: "'created' in viz_pol.stdout or 'configured' in viz_pol.stdout"
+
+    # ---------------- ChirpStack API secret (kept out of git) ----------------
+    # The chirpstack Deployment mounts chirpstack-secret (CHIRPSTACK__API__SECRET).
+    # It is sourced from the gitignored .env, so ArgoCD can't supply it — we
+    # must create it before ArgoCD brings ChirpStack up, or its pod gets stuck
+    # in CreateContainerConfigError.
+    - name: Check the .env file exists (holds CHIRPSTACK_API_SECRET)
+      ansible.builtin.stat:
+        path: "{{ env_file }}"
+      register: env_stat
+
+    - name: Fail with a clear message if .env is missing
+      ansible.builtin.fail:
+        msg: "{{ env_file }} not found — it must define CHIRPSTACK_API_SECRET=<value> (the file is gitignored)."
+      when: not env_stat.stat.exists
+
+    - name: Create chirpstack-secret from .env
+      ansible.builtin.shell: |
+        set -o pipefail
+        {{ kubectl_bin }} create secret generic chirpstack-secret \
+          --namespace=iot-system \
+          --from-literal=api-secret='{{ lookup("file", env_file) | regex_search("CHIRPSTACK_API_SECRET=(.+)", "\1") | first }}' \
+          --dry-run=client -o yaml | {{ kubectl_bin }} apply -f -
+      args: { executable: /bin/bash }
+      register: cs_secret
+      changed_when: "'created' in cs_secret.stdout or 'configured' in cs_secret.stdout"
 
     # ---------------- ArgoCD ----------------
     - name: Ensure argocd namespace exists
