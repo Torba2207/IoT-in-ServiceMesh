@@ -22,7 +22,7 @@ PB    := infrastructure/playbooks
 INV   := -i localhost,
 EXTRA := -e kubectl_bin=$(KUBECTL) -e linkerd_bin=$(LINKERD)
 
-.PHONY: help setup_everything setup_mk8s set_all_up teardown status
+.PHONY: help setup_everything setup_mk8s set_all_up teardown status nodered_export
 
 help:
 	@echo "Targets:"
@@ -31,6 +31,7 @@ help:
 	@echo "  make set_all_up       - install Linkerd, Linkerd Viz, ArgoCD; sync all services via ArgoCD"
 	@echo "  make teardown         - remove all services, ArgoCD, Linkerd Viz and Linkerd"
 	@echo "  make status           - ArgoCD apps + iot-system pods + mesh edges"
+	@echo "  make nodered_export   - snapshot live Node-RED flows back into git (sanitized)"
 	@echo ""
 	@echo "  KUBECTL=$(KUBECTL)"
 	@echo "  LINKERD=$(LINKERD)"
@@ -50,6 +51,9 @@ set_all_up:
 
 teardown:
 	$(ANSIBLE) $(INV) $(PB)/teardown.yml $(EXTRA)
+
+nodered_export:
+	@KUBECTL=$(KUBECTL) bash infrastructure/scripts/nodered-export.sh
 
 status:
 	@$(KUBECTL) get applications -n argocd || true
