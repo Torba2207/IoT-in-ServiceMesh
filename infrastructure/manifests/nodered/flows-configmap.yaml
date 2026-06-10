@@ -63,8 +63,8 @@ data:
             "connectionTimeoutFieldType": "num",
             "user": "chirpstack",
             "userFieldType": "str",
-            "password": "",
-            "passwordFieldType": "str"
+            "password": "POSTGRES_PASSWORD",
+            "passwordFieldType": "env"
         },
         {
             "id": "4b86a7453bf550de",
