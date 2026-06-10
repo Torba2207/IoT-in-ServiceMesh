@@ -22,26 +22,31 @@ PB    := infrastructure/playbooks
 INV   := -i localhost,
 EXTRA := -e kubectl_bin=$(KUBECTL) -e linkerd_bin=$(LINKERD)
 
-.PHONY: help setup_everything setup_mk8s set_all_up teardown status nodered_export
+.PHONY: help setup_everything setup_mk8s set_all_up teardown status nodered_export bootstrap_chirpstack
+
+DRY_RUN ?= false
 
 help:
 	@echo "Targets:"
-	@echo "  make setup_everything - provision MicroK8s, then install mesh + ArgoCD + sync all services"
+	@echo "  make setup_everything - provision MicroK8s, install mesh + ArgoCD, sync services, bootstrap ChirpStack"
 	@echo "  make setup_mk8s       - provision the MicroK8s cluster (nodes, addons, Gateway API CRDs)"
 	@echo "  make set_all_up       - install Linkerd, Linkerd Viz, ArgoCD; sync all services via ArgoCD"
 	@echo "  make teardown         - remove all services, ArgoCD, Linkerd Viz and Linkerd"
 	@echo "  make status           - ArgoCD apps + iot-system pods + mesh edges"
 	@echo "  make nodered_export   - snapshot live Node-RED flows back into git (sanitized)"
+	@echo "  make bootstrap_chirpstack [DRY_RUN=true] - provision ChirpStack tenant/app/profiles/gateway/devices"
 	@echo ""
 	@echo "  KUBECTL=$(KUBECTL)"
 	@echo "  LINKERD=$(LINKERD)"
 	@echo "  INVENTORY=$(INVENTORY)"
 	@echo "  SSH_KEY=$(SSH_KEY)"
 
-# Provision the cluster (remote, over SSH) then bring up the mesh + apps (local).
+# Provision the cluster (remote, over SSH), bring up the mesh + apps (local),
+# then provision ChirpStack devices. One command, full platform.
 setup_everything:
 	$(MAKE) setup_mk8s
 	$(MAKE) set_all_up
+	$(MAKE) bootstrap_chirpstack
 
 setup_mk8s:
 	$(ANSIBLE) -i $(INVENTORY) --private-key $(SSH_KEY) infrastructure/setup-microk8s.yaml
@@ -54,6 +59,9 @@ teardown:
 
 nodered_export:
 	@KUBECTL=$(KUBECTL) bash infrastructure/scripts/nodered-export.sh
+
+bootstrap_chirpstack:
+	$(ANSIBLE) $(INV) $(PB)/bootstrap-chirpstack.yml -e dry_run=$(DRY_RUN)
 
 status:
 	@$(KUBECTL) get applications -n argocd || true
