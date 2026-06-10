@@ -48,6 +48,12 @@
              + (['--dry-run'] if dry_run | bool else []) }}
       environment: "{{ bootstrap_env }}"
       register: bootstrap_out
+      # ChirpStack has no readiness probe, so right after set_all_up the API /
+      # admin user may not be ready yet. The bootstrap is idempotent, so retry
+      # until it succeeds (covers that startup window when chained).
+      until: bootstrap_out.rc == 0
+      retries: 6
+      delay: 10
       changed_when: "'created' in bootstrap_out.stdout or 'updated' in bootstrap_out.stdout"
 
     - name: Show bootstrap output
