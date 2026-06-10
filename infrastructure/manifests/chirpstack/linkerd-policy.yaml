@@ -8,7 +8,11 @@ spec:
     matchLabels:
       app: chirpstack
   port: 8080
-  proxyProtocol: HTTP/1
+  # opaque (raw TCP) so the port carries BOTH the browser's grpc-web (HTTP/1)
+  # and native gRPC (HTTP/2, used by the bootstrap script). mTLS and the
+  # AuthorizationPolicies below still apply at connection level. With HTTP/1
+  # here, native gRPC (h2) through the mesh breaks.
+  proxyProtocol: opaque
 ---
 apiVersion: policy.linkerd.io/v1beta3
 kind: Server
