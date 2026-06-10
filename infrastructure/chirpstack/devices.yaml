@@ -10,6 +10,10 @@ gateway:
   name: "Milesight UG63"
   description: "UG63-868M LoRaWAN gateway"
   region_config_id: "eu868"
+  # The UG63 sends stats every 30s; ChirpStack uses this interval to decide
+  # online/offline. Left at the default 0, the gateway shows offline even
+  # while stats keep arriving.
+  stats_interval: 30
   location:
     latitude: 54.36887108195724
     longitude: 18.607385158538822
