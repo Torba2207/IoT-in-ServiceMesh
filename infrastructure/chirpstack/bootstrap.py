@@ -90,6 +90,21 @@ def normalize_key(value: str) -> str:
     return normalize_eui(value)
 
 
+def keys_equal(a: str, b: str) -> bool:
+    """Compare two LoRaWAN keys, treating empty and all-zero as equivalent.
+
+    ChirpStack returns unset key fields as all-zero (e.g. app_key / gen_app_key
+    for a 1.0.x device that only populates nwk_key), so a plain compare against
+    an unset "" would report a spurious change on every run.
+    """
+    na, nb = normalize_key(a), normalize_key(b)
+    if na and set(na) <= {"0"}:
+        na = ""
+    if nb and set(nb) <= {"0"}:
+        nb = ""
+    return na == nb
+
+
 def require_hex(value: str, length: int, field_name: str) -> str:
     value = normalize_eui(value)
     if len(value) != length:
@@ -119,6 +134,23 @@ def read_text_file(path_value: str, config_dir: Path) -> str:
 
 def grpc_metadata(api_token: str) -> list[tuple[str, str]]:
     return [("authorization", f"Bearer {api_token}")]
+
+
+def obtain_token_via_login(server: str, email: str, password: str) -> str:
+    """Log in as a ChirpStack user and return a JWT to use as the API token.
+
+    Lets the bootstrap run without a pre-created API key (which would not
+    survive a teardown anyway) — the default admin/admin works on a fresh
+    instance.
+    """
+    channel = grpc.insecure_channel(server)
+    client = api.InternalServiceStub(channel)
+    try:
+        resp = client.Login(api.LoginRequest(email=email, password=password))
+        return resp.jwt
+    except grpc.RpcError as exc:
+        fail(f"Login failed for user '{email}': {grpc_error_message(exc)}")
+        return ""  # unreachable; fail() exits
 
 
 def is_not_found(exc: grpc.RpcError) -> bool:
@@ -359,7 +391,7 @@ class ChirpStackBootstrap:
                     req = api.UpdateTenantRequest()
                     req.tenant.CopyFrom(tenant)
                     self.tenant_client.Update(req, metadata=self.auth)
-                log("Tenant", name, "updated", tenant_id)
+                log("Tenant", name, "would-update" if self.dry_run else "updated", tenant_id)
             else:
                 log("Tenant", name, "exists", tenant_id)
 
@@ -429,7 +461,7 @@ class ChirpStackBootstrap:
                     req = api.UpdateApplicationRequest()
                     req.application.CopyFrom(app)
                     self.application_client.Update(req, metadata=self.auth)
-                log("Application", name, "updated", app_id)
+                log("Application", name, "would-update" if self.dry_run else "updated", app_id)
             else:
                 log("Application", name, "exists", app_id)
 
@@ -500,7 +532,7 @@ class ChirpStackBootstrap:
                     req = api.UpdateDeviceProfileRequest()
                     req.device_profile.CopyFrom(profile)
                     self.device_profile_client.Update(req, metadata=self.auth)
-                log("DeviceProfile", name, "updated", profile_id)
+                log("DeviceProfile", name, "would-update" if self.dry_run else "updated", profile_id)
             else:
                 log("DeviceProfile", name, "exists", profile_id)
 
@@ -609,7 +641,7 @@ class ChirpStackBootstrap:
                     req = api.UpdateGatewayRequest()
                     req.gateway.CopyFrom(gateway)
                     self.gateway_client.Update(req, metadata=self.auth)
-                log("Gateway", gateway_id, "updated", gateway.name)
+                log("Gateway", gateway_id, "would-update" if self.dry_run else "updated", gateway.name)
             else:
                 log("Gateway", gateway_id, "exists", gateway.name)
 
@@ -708,7 +740,7 @@ class ChirpStackBootstrap:
                     req = api.UpdateDeviceRequest()
                     req.device.CopyFrom(device)
                     self.device_client.Update(req, metadata=self.auth)
-                log("Device", name, "updated", dev_eui)
+                log("Device", name, "would-update" if self.dry_run else "updated", dev_eui)
             else:
                 log("Device", name, "exists", dev_eui)
 
@@ -800,10 +832,10 @@ class ChirpStackBootstrap:
 
         current = existing.device_keys
 
-        changed = (
-            normalize_key(current.nwk_key) != normalize_key(desired.nwk_key)
-            or normalize_key(current.app_key) != normalize_key(desired.app_key)
-            or normalize_key(current.gen_app_key) != normalize_key(desired.gen_app_key)
+        changed = not (
+            keys_equal(current.nwk_key, desired.nwk_key)
+            and keys_equal(current.app_key, desired.app_key)
+            and keys_equal(current.gen_app_key, desired.gen_app_key)
         )
 
         if not changed:
@@ -881,7 +913,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--token",
         default=os.getenv("CHIRPSTACK_API_TOKEN"),
-        help="ChirpStack API token. Default: env CHIRPSTACK_API_TOKEN",
+        help="ChirpStack API token. If omitted, the script logs in to obtain one.",
+    )
+
+    parser.add_argument(
+        "--login-email",
+        default=os.getenv("CHIRPSTACK_LOGIN_EMAIL", "admin"),
+        help="User for login when --token is not given. Default: env CHIRPSTACK_LOGIN_EMAIL or 'admin'",
+    )
+
+    parser.add_argument(
+        "--login-password",
+        default=os.getenv("CHIRPSTACK_LOGIN_PASSWORD", "admin"),
+        help="Password for login when --token is not given. Default: env CHIRPSTACK_LOGIN_PASSWORD or 'admin'",
     )
 
     parser.add_argument(
@@ -902,8 +946,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    if not args.token:
-        fail("ChirpStack API token is required. Use --token or CHIRPSTACK_API_TOKEN env var.")
+    token = args.token
+    if not token:
+        print(f"No token provided — logging in as '{args.login_email}'", flush=True)
+        token = obtain_token_via_login(args.server, args.login_email, args.login_password)
 
     config_path = Path(args.config).resolve()
     config_dir = config_path.parent
@@ -916,7 +962,7 @@ def main() -> None:
 
     bootstrap = ChirpStackBootstrap(
         server=args.server,
-        api_token=args.token,
+        api_token=token,
         config_dir=config_dir,
         dry_run=args.dry_run,
     )
