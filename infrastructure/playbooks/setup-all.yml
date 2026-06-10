@@ -106,6 +106,20 @@
       register: cs_secret
       changed_when: "'created' in cs_secret.stdout or 'configured' in cs_secret.stdout"
 
+    - name: Create postgres-credentials from .env
+      ansible.builtin.shell: |
+        set -o pipefail
+        {{ kubectl_bin }} create secret generic postgres-credentials \
+          --namespace=iot-system \
+          --from-literal=POSTGRES_USER='{{ lookup("file", env_file) | regex_search("POSTGRES_USER=(.+)", "\1") | first }}' \
+          --from-literal=POSTGRES_PASSWORD='{{ lookup("file", env_file) | regex_search("POSTGRES_PASSWORD=(.+)", "\1") | first }}' \
+          --from-literal=POSTGRES_DB='{{ lookup("file", env_file) | regex_search("POSTGRES_DB=(.+)", "\1") | first }}' \
+          --dry-run=client -o yaml | {{ kubectl_bin }} apply -f -
+      args: { executable: /bin/bash }
+      register: pg_secret
+      changed_when: "'created' in pg_secret.stdout or 'configured' in pg_secret.stdout"
+      no_log: true
+
     # ---------------- ArgoCD ----------------
     - name: Ensure argocd namespace exists
       ansible.builtin.shell: "set -o pipefail; {{ kubectl_bin }} create namespace argocd --dry-run=client -o yaml | {{ kubectl_bin }} apply -f -"
