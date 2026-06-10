@@ -30,12 +30,16 @@ export function groupByDevice(uplinks) {
     map.get(u.device_eui).recs.push(u);
   }
   for (const d of map.values()) d.recs.reverse();
-  return [...map.values()];
+  // Stable, name-based ordering so cards keep a fixed position and don't jump
+  // to the top when a device's latest uplink arrives.
+  return [...map.values()].sort((a, b) =>
+    (a.name || a.eui).localeCompare(b.name || b.eui)
+  );
 }
 
-// Constant metadata fields that aren't interesting to plot.
+// Constant metadata fields (and battery) that aren't interesting to plot.
 const META_KEYS = new Set([
-  "sn", "firmware_version", "hardware_version", "ipso_version",
+  "battery", "sn", "firmware_version", "hardware_version", "ipso_version",
   "lorawan_class", "device_status",
 ]);
 
