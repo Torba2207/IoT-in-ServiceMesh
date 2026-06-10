@@ -49,6 +49,10 @@ metadata:
     app: nodered
 spec:
   replicas: 1
+  # The /data PVC is ReadWriteOnce, so a rolling update can't mount it on a new
+  # pod while the old one holds it. Recreate terminates the old pod first.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: nodered
@@ -100,6 +104,13 @@ spec:
               value: "UTC"
             - name: NODE_RED_ENABLE_PROJECTS
               value: "false"
+            # The flow's PostgreSQL node reads its password from this env var
+            # (passwordFieldType: env) so the secret is never stored in the flow.
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
           resources:
             requests:
               cpu: "200m"
