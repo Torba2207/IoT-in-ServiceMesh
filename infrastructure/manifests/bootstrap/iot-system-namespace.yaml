@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: iot-system
+  annotations:
+    # Mesh every pod in this namespace.
+    linkerd.io/inject: enabled
+    # Deny-by-default inbound policy: nothing is reachable unless an explicit
+    # Server + AuthorizationPolicy allows it.
+    config.linkerd.io/default-inbound-policy: deny
+    # MQTT (1883) is raw TCP, not HTTP — mark it opaque so the proxy doesn't
+    # try to do L7/HTTP handling on it.
+    config.linkerd.io/opaque-ports: "1883"
