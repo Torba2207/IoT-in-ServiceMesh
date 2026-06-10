@@ -64,9 +64,13 @@ function CategoricalChart({ field, points }) {
   );
 }
 
+// How many of the most recent records to plot per device (keeps charts readable).
+const PLOT_POINTS = 15;
+
 function DeviceCard({ device }) {
-  const numKeys = numericKeys(device.recs);
-  const catSeries = categoricalSeries(device.recs);
+  const recs = device.recs.slice(-PLOT_POINTS); // most recent N, oldest -> newest
+  const numKeys = numericKeys(recs);
+  const catSeries = categoricalSeries(recs);
   const catFields = Object.keys(catSeries);
 
   return (
@@ -74,7 +78,7 @@ function DeviceCard({ device }) {
       <h3 className="text-sm font-semibold">{device.name || "Unnamed device"}</h3>
       <p className="mb-3 font-mono text-xs text-slate-400">{device.eui}</p>
 
-      {numKeys.length > 0 && <NumericChart recs={device.recs} keys={numKeys} />}
+      {numKeys.length > 0 && <NumericChart recs={recs} keys={numKeys} />}
       {catFields.map((f) => (
         <CategoricalChart key={f} field={f} points={catSeries[f]} />
       ))}
