@@ -1,0 +1,61 @@
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: iot-stat-reader-http
+  namespace: iot-system
+spec:
+  podSelector:
+    matchLabels:
+      app: iot-stat-reader
+  port: 8000
+  proxyProtocol: HTTP/1
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: iot-stat-reader-identity
+  namespace: iot-system
+spec:
+  identities:
+    - "iot-stat-reader.iot-system.serviceaccount.identity.linkerd.cluster.local"
+---
+# Allow external (NodePort / non-meshed) traffic to reach the HTTP API
+apiVersion: policy.linkerd.io/v1alpha1
+kind: NetworkAuthentication
+metadata:
+  name: iot-stat-reader-external
+  namespace: iot-system
+spec:
+  networks:
+    - cidr: 0.0.0.0/0
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-external-to-iot-stat-reader
+  namespace: iot-system
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: iot-stat-reader-http
+  requiredAuthenticationRefs:
+    - kind: NetworkAuthentication
+      group: policy.linkerd.io
+      name: iot-stat-reader-external
+---
+# Allow iot-stat-reader to connect to Postgres
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-iot-stat-reader-to-postgres
+  namespace: iot-system
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: postgres-server
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: iot-stat-reader-identity
