@@ -28,7 +28,7 @@ DRY_RUN ?= false
 
 help:
 	@echo "Targets:"
-	@echo "  make setup_everything - provision MicroK8s, then install mesh + ArgoCD + sync all services"
+	@echo "  make setup_everything - provision MicroK8s, install mesh + ArgoCD, sync services, bootstrap ChirpStack"
 	@echo "  make setup_mk8s       - provision the MicroK8s cluster (nodes, addons, Gateway API CRDs)"
 	@echo "  make set_all_up       - install Linkerd, Linkerd Viz, ArgoCD; sync all services via ArgoCD"
 	@echo "  make teardown         - remove all services, ArgoCD, Linkerd Viz and Linkerd"
@@ -41,10 +41,12 @@ help:
 	@echo "  INVENTORY=$(INVENTORY)"
 	@echo "  SSH_KEY=$(SSH_KEY)"
 
-# Provision the cluster (remote, over SSH) then bring up the mesh + apps (local).
+# Provision the cluster (remote, over SSH), bring up the mesh + apps (local),
+# then provision ChirpStack devices. One command, full platform.
 setup_everything:
 	$(MAKE) setup_mk8s
 	$(MAKE) set_all_up
+	$(MAKE) bootstrap_chirpstack
 
 setup_mk8s:
 	$(ANSIBLE) -i $(INVENTORY) --private-key $(SSH_KEY) infrastructure/setup-microk8s.yaml
