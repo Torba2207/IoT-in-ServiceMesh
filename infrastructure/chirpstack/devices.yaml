@@ -28,6 +28,7 @@ device_profiles:
     supports_class_c: false
     adr: true
     codec_file: "decoders/ws101-decoder.js"
+    uplink_interval: 86400
 
   - name: "Milesight WS202 PIR Light"
     region: "eu868"
@@ -38,6 +39,7 @@ device_profiles:
     supports_class_c: false
     adr: true
     codec_file: "decoders/ws202-decoder.js"
+    uplink_interval: 300
 
   - name: "Milesight WS302 Sound Level"
     region: "eu868"
@@ -48,6 +50,7 @@ device_profiles:
     supports_class_c: false
     adr: true
     codec_file: "decoders/ws302-decoder.js"
+    uplink_interval: 60
 
 devices:
   - name: "Button-1"
