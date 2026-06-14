@@ -203,7 +203,7 @@ Linkerd zależy od ich obecności.
   [ChirpStack v4], [Serwer sieciowy i aplikacyjny LoRaWAN], [Aplikacja],
   [ChirpStack Gateway Bridge], [Semtech UDP packet-forwarder na MQTT], [Aplikacja],
   [Eclipse Mosquitto], [Broker MQTT między gateway-bridge a ChirpStack], [Aplikacja],
-  [PostgreSQL / Redis], [Magazyn ChirpStack i pamięć sesji urządzeń], [Dane],
+  [PostgreSQL / Redis], [trwałe dane ChirpStack i aplikacji / pamięć podręczna oraz strumienie runtime], [Dane],
   [Node-RED], [Silnik przepływów: MQTT do PostgreSQL], [Aplikacja],
   [iot-stat-reader], [Usługa FastAPI udostępniająca zapisane uplinki], [Aplikacja],
   [iot-stat-frontend], [Panel React + Tailwind (budowa Vite, serwowanie nginx)], [Aplikacja],
