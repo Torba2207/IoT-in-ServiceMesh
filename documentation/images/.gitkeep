@@ -1,0 +1,17 @@
+# Documentation screenshots. Files referenced by main.typ / main-pl.typ:
+#   architecture.png / architecture-pl.png  - generated diagram (EN / PL)
+#   chirpstack_device_profiles.png          - ChirpStack device profiles (WS101/202/302)
+#   nodered-gui.png                          - Node-RED flow editor
+#   argocd_applications.png                  - ArgoCD, all five apps Synced/Healthy
+#   chirpstack_dashboard.png                 - ChirpStack tenant dashboard
+#   tcpdump_app_to_proxy.png                 - Proof A: cleartext on lo
+#   tcpdump_proxy_to_remoteproxy.png         - Proof A: encrypted on eth0 (grep silent)
+#   TLS_mqtt_mosquitto.png                   - Proof A: Wireshark TLSv1.3
+#   unauthorized_client_rogue.png            - Proof B: client connection lost
+#   denial_log_proof_b.png                   - Proof B: proxy "Connection denied"
+#   deny_counter_proof_b.png                 - Proof B: authz allow/deny counters
+#   linkerd_mtls_meshed_edge.png             - Proof C: viz edges SECURED
+#   tls_is_true__verified_client_identity__authorizing_policy.png - Proof C: viz tap
+#   linkerd-viz-gui.png                      - Proof C: Viz dashboard, all meshed / 100%
+#   iot-stats-frontend.png                   - Proof D: dashboard plots
+#   iot-stats-frontend-uplinks.png           - Proof D: uplinks table
