@@ -55,7 +55,7 @@
   node(LX, -0.8, 3.6, 0.95, c-app, [iot-stat-frontend \ #text(7.5pt)[panel React]])
 
   // magazyny danych
-  node(RX, 4.3, 2.8, 0.95, c-data, [Redis \ #text(7.5pt)[pamięć sesji]])
+  node(RX, 4.3, 2.8, 0.95, c-data, [Redis \ #text(7.5pt)[pamięć podręczna]])
   node(RX, 1.7, 2.8, 0.95, c-data, [PostgreSQL \ #text(7.5pt)[device_uplinks]])
 
   flow((LX, 7.02), (LX, 6.38), lbl: [MQTT])
