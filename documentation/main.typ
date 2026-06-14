@@ -30,16 +30,16 @@
   #v(0.3cm)
   #text(size: 13pt, fill: gray)[A LoRaWAN sensor platform running on MicroK8s,
   secured end-to-end with Linkerd and delivered through GitOps]
-  #v(1cm)
-  #text(size: 11pt)[Oleksandr Nychyporchuk]
+  #v(16cm)
+  #text(size: 11pt)[Oleksandr Nychyporchuk 196659, Maksym Nievierov 211996, Mikołaj Klikowicz 193264, Bartosz Sontowski 193551, Mateusz Chmielewski 193661]
+
   #v(0.1cm)
-  #text(size: 10pt, fill: gray)[Project documentation]
 ]
 
 #v(1cm)
 #line(length: 100%)
 #v(0.3cm)
-
+#pagebreak()
 #outline(depth: 2, indent: auto)
 #pagebreak()
 
@@ -52,8 +52,7 @@ the frames are decoded, stored in PostgreSQL and shown on a web dashboard.
 Everything in the cluster runs inside a zero-trust service mesh built with *Linkerd*: pods
 communicate only where an explicit policy allows it, and that traffic is automatically
 mutually authenticated and encrypted with mTLS. The platform is declarative end to end,
-described in this Git repository and reconciled by *ArgoCD*, so it can be rebuilt from
-scratch with a single command.
+described in a Git repository and reconciled by *ArgoCD*.
 
 This document covers the architecture, hardware, virtual machines, technology stack, the
 design decisions behind our manifests, the automation, and a set of proofs that the
@@ -573,27 +572,3 @@ and the dashboard renders them as per-device time series and a recent-uplinks ta
 
 #figpic("images/iot-stats-frontend-uplinks.png",
   [The Uplinks view: the most recent decoded uplinks as stored in `device_uplinks`.])
-
-= Operations quick reference
-
-```bash
-# health
-kubectl get applications -n argocd
-kubectl get pods -n iot-system
-linkerd viz edges deployment -n iot-system          # mTLS at a glance
-
-# exposed surface (should be only the five intended NodePorts)
-kubectl get svc -n iot-system | grep -E 'NodePort'
-
-# the authorization model
-kubectl get server,authorizationpolicy -n iot-system
-kubectl get meshtlsauthentication,networkauthentication -n iot-system
-
-# data pipeline
-kubectl exec -n iot-system postgres-0 -c postgres -- \
-  psql -U chirpstack -d chirpstack -c "SELECT count(*) FROM device_uplinks;"
-```
-
-#v(0.5cm)
-#line(length: 100%)
-#align(center)[#text(size: 9pt, fill: gray)[End of document]]
