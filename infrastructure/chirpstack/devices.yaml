@@ -1,0 +1,84 @@
+tenant:
+  name: ChirpStack
+
+application:
+  name: IoT-ServiceMesh
+  description: IoT devices connected through Milesight UG63 and Linkerd service mesh
+
+gateway:
+  gateway_id: "24e124fffef8026e"
+  name: "Milesight UG63"
+  description: "UG63-868M LoRaWAN gateway"
+  region_config_id: "eu868"
+  # The UG63 sends stats every 30s; ChirpStack uses this interval to decide
+  # online/offline. Left at the default 0, the gateway shows offline even
+  # while stats keep arriving.
+  stats_interval: 30
+  location:
+    latitude: 54.36887108195724
+    longitude: 18.607385158538822
+
+device_profiles:
+  - name: "Milesight WS101 Button"
+    region: "eu868"
+    mac_version: "LORAWAN_1_0_3"
+    reg_params_revision: "RP002_1_0_3"
+    supports_otaa: true
+    supports_class_b: false
+    supports_class_c: false
+    adr: true
+    codec_file: "decoders/ws101-decoder.js"
+    uplink_interval: 86400
+
+  - name: "Milesight WS202 PIR Light"
+    region: "eu868"
+    mac_version: "LORAWAN_1_0_3"
+    reg_params_revision: "RP002_1_0_3"
+    supports_otaa: true
+    supports_class_b: false
+    supports_class_c: false
+    adr: true
+    codec_file: "decoders/ws202-decoder.js"
+    uplink_interval: 300
+
+  - name: "Milesight WS302 Sound Level"
+    region: "eu868"
+    mac_version: "LORAWAN_1_0_3"
+    reg_params_revision: "RP002_1_0_3"
+    supports_otaa: true
+    supports_class_b: false
+    supports_class_c: false
+    adr: true
+    codec_file: "decoders/ws302-decoder.js"
+    uplink_interval: 60
+
+devices:
+  - name: "Button-1"
+    dev_eui: "24e124535c271986"
+    join_eui: "24e124c0002a0001"
+    profile: "Milesight WS101 Button"
+    app_key_env: "APPKEY_24E124535C271986"
+    tags:
+      device_type: "ws101"
+      location: "lab"
+      owner: "iot-service-mesh"
+
+  - name: "PIR&Light Sensor"
+    dev_eui: "24e124538c421853"
+    join_eui: "24e124c0002a0002"
+    profile: "Milesight WS202 PIR Light"
+    app_key_env: "APPKEY_24E124538C421853"
+    tags:
+      device_type: "ws202"
+      location: "lab"
+      owner: "iot-service-mesh"
+
+  - name: "Sound Level Sensor"
+    dev_eui: "24e124743d186530"
+    join_eui: "24e124c0002a0003"
+    profile: "Milesight WS302 Sound Level"
+    app_key_env: "APPKEY_24E124743D186530"
+    tags:
+      device_type: "ws302"
+      location: "lab"
+      owner: "iot-service-mesh"

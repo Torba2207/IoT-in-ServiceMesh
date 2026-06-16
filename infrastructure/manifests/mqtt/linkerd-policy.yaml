@@ -1,0 +1,38 @@
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: mosquitto-mqtt
+  namespace: iot-system
+spec:
+  podSelector:
+    matchLabels:
+      app: mosquitto
+  port: 1883
+  proxyProtocol: opaque
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: iot-system-meshed-clients
+  namespace: iot-system
+spec:
+  identities:
+    - "mqtt-client.iot-system.serviceaccount.identity.linkerd.cluster.local"
+    - "chirpstack.iot-system.serviceaccount.identity.linkerd.cluster.local"
+    - "chirpstack-gateway-bridge.iot-system.serviceaccount.identity.linkerd.cluster.local"
+    - "node-red.iot-system.serviceaccount.identity.linkerd.cluster.local"
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-iot-system-to-mosquitto
+  namespace: iot-system
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: mosquitto-mqtt
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: iot-system-meshed-clients

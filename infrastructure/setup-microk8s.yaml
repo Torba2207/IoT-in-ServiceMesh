@@ -1,0 +1,125 @@
+---
+# Provisions the MicroK8s cluster itself (nodes, addons, worker join, load-gen)
+# plus the cluster-level prerequisites for the service mesh.
+#
+# The mesh (Linkerd + Viz), the iot-system namespace and the applications are
+# NOT installed here — that is owned by playbooks/setup-all.yml. Run both in
+# order via `make setup_everything`.
+- name: Prepare all K8s nodes and install MicroK8s
+  hosts: microk8s_cluster
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install snapd
+      apt:
+        name: snapd
+        state: present
+
+    - name: Check if MicroK8s is installed
+      command: snap list microk8s
+      register: mk8s_check
+      failed_when: false
+      changed_when: false
+
+    - name: Install MicroK8s via raw command (Bypass Ansible bug)
+      command: snap install microk8s --classic
+      when: mk8s_check.rc != 0
+
+    - name: Add current user to microk8s group
+      user:
+        name: "{{ ansible_user }}"
+        groups: microk8s
+        append: yes
+
+    - name: Wait for MicroK8s to be ready
+      command: microk8s status --wait-ready
+      changed_when: false
+
+- name: Configure Control Plane & Enable Addons
+  hosts: control_plane
+  become: yes
+  tasks:
+    - name: Enable DNS and Storage addons
+      command: microk8s enable dns hostpath-storage
+      register: addon_output
+      changed_when: "'already enabled' not in addon_output.stdout"
+
+    - name: Enable community addons repository
+      command: microk8s enable community
+      register: community_output
+      changed_when: "'already enabled' not in community_output.stdout"
+      ignore_errors: yes # Sometimes returns a non-zero exit if already added in newer snap versions
+
+- name: Join Worker Nodes to the Cluster
+  hosts: workers
+  become: yes
+  serial: 1  # Ensures nodes join one-by-one to avoid dqlite race conditions
+  tasks:
+    - name: Check if node is part of a multi-node cluster
+      command: microk8s kubectl get nodes
+      register: nodes_list
+      changed_when: false
+
+    - name: Generate a fresh join token on the control plane
+      command: microk8s add-node --format short --token-ttl 3600
+      delegate_to: cp-node
+      register: fresh_token
+      when: "(nodes_list.stdout_lines | length) <= 2"
+
+    - name: Join the cluster
+      command: "{{ fresh_token.stdout }}"
+      when: "(nodes_list.stdout_lines | length) <= 2"
+
+- name: Setup Load Generator
+  hosts: load_generator
+  become: yes
+  tasks:
+    - name: Install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - curl
+          - gnupg
+        state: present
+
+    - name: Add k6 (Load Testing Tool) GPG key
+      apt_key:
+        keyserver: hkp://keyserver.ubuntu.com:80
+        id: C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+
+    - name: Add k6 repository
+      apt_repository:
+        repo: "deb https://dl.k6.io/deb stable main"
+        state: present
+
+    - name: Install k6
+      apt:
+        name: k6
+        state: present
+        update_cache: yes
+
+# Cluster-level prerequisites for the mesh. The Linkerd/Viz install, the
+# iot-system namespace and its deny-by-default policy now live in
+# playbooks/setup-all.yml — only kube config export and the Gateway API CRDs
+# (a cluster-wide prerequisite Linkerd needs) remain here.
+- name: Cluster-level mesh prerequisites (kubeconfig, Gateway API CRDs)
+  hosts: control_plane
+  become: yes
+  tasks:
+    - name: Create .kube directory for root user
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '0700'
+
+    - name: Export MicroK8s config for external CLI tools
+      shell: microk8s config > /root/.kube/config
+      changed_when: false
+
+    - name: Install Kubernetes Gateway API CRDs (required by Linkerd)
+      command: microk8s kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+      register: gateway_crds
+      changed_when: "'created' in gateway_crds.stdout"

@@ -1,0 +1,99 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: chirpstack
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Torba2207/IoT-in-ServiceMesh.git
+    targetRevision: dev
+    path: infrastructure/manifests/chirpstack
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: iot-system
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: false
+      selfHeal: false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mqtt
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Torba2207/IoT-in-ServiceMesh.git
+    targetRevision: dev
+    path: infrastructure/manifests/mqtt
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: iot-system
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: false
+      selfHeal: false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nodered
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Torba2207/IoT-in-ServiceMesh.git
+    targetRevision: dev
+    path: infrastructure/manifests/nodered
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: iot-system
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: false
+      selfHeal: false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: iot-stat-reader
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Torba2207/IoT-in-ServiceMesh.git
+    targetRevision: dev
+    path: infrastructure/manifests/iot-stat-reader
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: iot-system
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: false
+      selfHeal: false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: iot-stat-frontend
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Torba2207/IoT-in-ServiceMesh.git
+    targetRevision: dev
+    path: infrastructure/manifests/iot-stat-frontend
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: iot-system
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: false
+      selfHeal: false

@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: node-red
+  namespace: iot-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nodered-settings
+  namespace: iot-system
+data:
+  settings.js: |
+    module.exports = {
+      uiPort: process.env.PORT || 1880,
+      uiHost: "0.0.0.0",
+
+      logLevel: "info",
+
+      functionGlobalContext: {
+        os:require('os')
+      },
+
+      editorTheme: {
+        projects: false,
+        palette: {
+          catalogues: [
+            'https://catalogue.nodered.org/catalogue.json'
+          ]
+        }
+      },
+
+      httpNodeRoot: '/api',
+      httpAdminRoot: '/',
+
+      contextStorage: {
+        default: {
+          module: "localfilesystem"
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodered
+  namespace: iot-system
+  labels:
+    app: nodered
+spec:
+  replicas: 1
+  # The /data PVC is ReadWriteOnce, so a rolling update can't mount it on a new
+  # pod while the old one holds it. Recreate terminates the old pod first.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nodered
+  template:
+    metadata:
+      labels:
+        app: nodered
+    spec:
+      serviceAccountName: node-red
+      initContainers:
+        # Seed the flows and install the PostgreSQL palette node into a fresh
+        # /data PVC. Both steps are guarded so an existing PVC (with your GUI
+        # edits) is never clobbered — they only run on a brand-new volume.
+        - name: seed
+          image: nodered/node-red:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              if [ ! -f /data/flows.json ]; then
+                echo "seeding flows.json from git"
+                cp /seed/flows.json /data/flows.json
+              fi
+              if [ ! -d /data/node_modules/node-red-contrib-postgresql ]; then
+                echo "installing node-red-contrib-postgresql palette node"
+                cd /data && npm install --no-audit --no-fund node-red-contrib-postgresql@~0.15.4
+              fi
+              echo "seed complete"
+          volumeMounts:
+            - name: nodered-data
+              mountPath: /data
+            - name: nodered-flows
+              mountPath: /seed
+      containers:
+        - name: nodered
+          image: nodered/node-red:latest
+          ports:
+            - containerPort: 1880
+              name: ui
+          volumeMounts:
+            - name: nodered-data
+              mountPath: /data
+            - name: nodered-settings
+              mountPath: /data/settings.js
+              subPath: settings.js
+          env:
+            - name: TZ
+              value: "UTC"
+            - name: NODE_RED_ENABLE_PROJECTS
+              value: "false"
+            # The flow's PostgreSQL node reads its password from this env var
+            # (passwordFieldType: env) so the secret is never stored in the flow.
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+              ephemeral-storage: "1Gi"
+      volumes:
+        - name: nodered-data
+          persistentVolumeClaim:
+            claimName: nodered-data
+        - name: nodered-settings
+          configMap:
+            name: nodered-settings
+        - name: nodered-flows
+          configMap:
+            name: nodered-flows
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodered
+  namespace: iot-system
+spec:
+  selector:
+    app: nodered
+  type: ClusterIP
+  ports:
+    - name: ui
+      port: 1880
+      targetPort: 1880
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodered-ui
+  namespace: iot-system
+spec:
+  selector:
+    app: nodered
+  type: NodePort
+  ports:
+    - name: ui
+      port: 1880
+      targetPort: 1880
+      nodePort: 31880

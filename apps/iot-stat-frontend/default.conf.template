@@ -1,0 +1,30 @@
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPA: let the React router handle unknown paths
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy API calls to the iot-stat-reader service (same namespace).
+    # The upstream is held in a variable so nginx resolves it lazily at request
+    # time (via the cluster DNS) instead of at startup — otherwise the pod would
+    # crash-loop whenever the reader Service/DNS isn't ready yet.
+    # ${NGINX_LOCAL_RESOLVERS} is injected from /etc/resolv.conf by the nginx
+    # image entrypoint (15-local-resolvers).
+    location /api/ {
+        resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+        set $upstream iot-stat-reader.iot-system.svc.cluster.local;
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass http://$upstream:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # SSE-friendly (in case /api/uplinks/stream is used later)
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+    }
+}
